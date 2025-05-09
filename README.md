@@ -1,6 +1,6 @@
-# Spotify Auto Genius Opener
+# Spotify Auto Genius
 
-A Windows application that automatically opens Genius lyrics pages for currently playing Spotify tracks.
+An application that automatically opens Genius lyrics pages for currently playing Spotify tracks.
 
 ## Features
 
