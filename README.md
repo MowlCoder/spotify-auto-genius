@@ -48,7 +48,7 @@ go build
 1. Start Spotify and play some music
 2. Run the application:
 ```bash
-./spotify-auto-genius-opener
+./spotify-auto-genius
 ```
 
 The application will automatically:
