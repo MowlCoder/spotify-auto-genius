@@ -1,16 +1,11 @@
-package main
+package system
 
 import (
 	"errors"
-	"log"
 	"strings"
 	"syscall"
-	"time"
 	"unsafe"
 
-	"github.com/PuerkitoBio/goquery"
-	"github.com/go-rod/rod"
-	"github.com/go-rod/rod/lib/proto"
 	"golang.org/x/sys/windows"
 )
 
@@ -31,6 +26,23 @@ var (
 
 	cb = syscall.NewCallback(enumWindowsCallback)
 )
+
+func enumWindowsCallback(hWnd windows.HWND, lParam uintptr) uintptr {
+	visible, _, _ := procIsWindowVisible.Call(uintptr(hWnd))
+	if visible == 0 {
+		return 1
+	}
+
+	var pid uint32
+	procGetWindowThreadProcessId.Call(uintptr(hWnd), uintptr(unsafe.Pointer(&pid)))
+
+	searchData := (*WindowSearchData)(unsafe.Pointer(lParam))
+	if pid == searchData.PID {
+		searchData.Window = hWnd
+		return 0
+	}
+	return 1
+}
 
 const (
 	TH32CS_SNAPPROCESS = 0x00000002
@@ -55,27 +67,16 @@ type WindowSearchData struct {
 	Window windows.HWND
 }
 
-func enumWindowsCallback(hWnd windows.HWND, lParam uintptr) uintptr {
-	visible, _, _ := procIsWindowVisible.Call(uintptr(hWnd))
-	if visible == 0 {
-		return 1
-	}
+type WindowsSystemController struct{}
 
-	var pid uint32
-	procGetWindowThreadProcessId.Call(uintptr(hWnd), uintptr(unsafe.Pointer(&pid)))
-
-	searchData := (*WindowSearchData)(unsafe.Pointer(lParam))
-	if pid == searchData.PID {
-		searchData.Window = hWnd
-		return 0
-	}
-	return 1
+func NewWindowsSystemController() *WindowsSystemController {
+	return &WindowsSystemController{}
 }
 
-func findSpotifyWindow() windows.HWND {
+func (w *WindowsSystemController) getSpotifyWindow() (windows.HWND, error) {
 	snapshot, _, _ := procCreateToolhelp32Snapshot.Call(TH32CS_SNAPPROCESS, 0)
 	if snapshot == 0 || snapshot == uintptr(windows.InvalidHandle) {
-		return 0
+		return 0, errors.New("failed to create snapshot")
 	}
 	defer syscall.CloseHandle(syscall.Handle(snapshot))
 
@@ -84,7 +85,7 @@ func findSpotifyWindow() windows.HWND {
 
 	r1, _, _ := procProcess32First.Call(snapshot, uintptr(unsafe.Pointer(&entry)))
 	if r1 == 0 {
-		return 0
+		return 0, errors.New("failed to get first process")
 	}
 
 	var spotifyPID uint32
@@ -101,7 +102,7 @@ func findSpotifyWindow() windows.HWND {
 	}
 
 	if spotifyPID == 0 {
-		return 0
+		return 0, errors.New("failed to find Spotify process")
 	}
 
 	searchData := WindowSearchData{
@@ -110,97 +111,37 @@ func findSpotifyWindow() windows.HWND {
 	}
 
 	procEnumWindows.Call(cb, uintptr(unsafe.Pointer(&searchData)))
-	return searchData.Window
+	return searchData.Window, nil
 }
 
-func getSpotifyWindowTitle() string {
-	hwnd := findSpotifyWindow()
+func (w *WindowsSystemController) GetCurrentPlayingTrackTitle() (string, error) {
+	hwnd, err := w.getSpotifyWindow()
 	if hwnd == 0 {
-		return ""
+		return "", err
 	}
 
 	length, _, _ := procGetWindowTextLengthW.Call(uintptr(hwnd))
 	if length == 0 {
-		return ""
+		return "", errors.New("failed to get window text length")
 	}
 
 	buf := make([]uint16, length+1)
 	procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), length+1)
-	return syscall.UTF16ToString(buf)
+	windowTitle := syscall.UTF16ToString(buf)
+	if windowTitle == "Spotify Premium" || windowTitle == "Spotify" {
+		return "", errors.New("Spotify is running but not playing a track")
+	}
+
+	return windowTitle, nil
 }
 
-func openURLInBrowser(url string) bool {
+func (w *WindowsSystemController) OpenURLInBrowser(url string) error {
 	urlPtr, _ := syscall.UTF16PtrFromString(url)
 	openStr, _ := syscall.UTF16PtrFromString("open")
 	r, _, _ := procShellExecuteW.Call(0, uintptr(unsafe.Pointer(openStr)),
 		uintptr(unsafe.Pointer(urlPtr)), 0, 0, SW_SHOWNORMAL)
-	return r > 32
-}
-
-func openGeniusPage(title string) error {
-	url := "https://genius.com/search?q=" + title
-
-	browser := rod.New().Timeout(10 * time.Second)
-	if err := browser.Connect(); err != nil {
-		return errors.New("failed to connect to browser: " + err.Error())
+	if r <= 32 {
+		return errors.New("failed to open URL in browser")
 	}
-	defer browser.Close()
-
-	page, err := browser.Page(proto.TargetCreateTarget{URL: url})
-	if err != nil {
-		return errors.New("failed to create page: " + err.Error())
-	}
-
-	if err := page.WaitLoad(); err != nil {
-		return errors.New("failed to load page: " + err.Error())
-	}
-
-	html, err := page.HTML()
-	if err != nil {
-		return errors.New("failed to get HTML: " + err.Error())
-	}
-
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-	if err != nil {
-		log.Printf("Failed to parse HTML: %v", err)
-		log.Println("Opening search page", url)
-		openURLInBrowser(url)
-		return nil
-	}
-
-	href, exists := doc.Find("a.mini_card").First().Attr("href")
-	if !exists {
-		log.Println("No exact match found, opening search page:", url)
-		openURLInBrowser(url)
-	} else {
-		log.Println("Found exact match:", href)
-		openURLInBrowser(href)
-	}
-
 	return nil
-}
-
-func main() {
-	prevTitle := ""
-	log.Println("Starting scanning Spotify...")
-
-	for {
-		title := getSpotifyWindowTitle()
-		if title == "" {
-			log.Println("Spotify is not running...Waiting 5 seconds...")
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		if title != prevTitle && title != "Spotify Premium" && title != "Spotify" {
-			log.Println("New track:", title)
-			prevTitle = title
-
-			if err := openGeniusPage(title); err != nil {
-				log.Printf("Failed to open Genius page: %v", err)
-			}
-		}
-
-		time.Sleep(1 * time.Second)
-	}
 }

@@ -7,12 +7,12 @@ tasks:
 
   build:
     cmds:
-      - go build -o main.exe main.go
+      - go build -o bin/spotify-auto-genius.exe -ldflags="-s -w" -gcflags=all="-l -B" ./cmd/spotify-auto-genius/main.go
 
   run:
     cmds:
-      - ./main.exe
+      - ./bin/spotify-auto-genius.exe
 
   clean:
     cmds:
-      - rm -f main.exe
+      - rm -f bin/spotify-auto-genius.exe
