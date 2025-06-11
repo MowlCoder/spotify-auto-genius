@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"log"
-	"runtime"
 	"time"
 
 	"github.com/MowlCoder/spotify-auto-genius/internal/genius"
@@ -12,11 +10,7 @@ import (
 )
 
 func getSystemController() (spotify.SystemController, error) {
-	if runtime.GOOS == "windows" {
-		return system.NewWindowsSystemController(), nil
-	}
-
-	return nil, errors.New("unsupported OS")
+	return system.NewSystemController()
 }
 
 func main() {

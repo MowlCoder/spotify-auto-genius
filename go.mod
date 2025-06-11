@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/go-rod/rod v0.116.2
+	github.com/godbus/dbus/v5 v5.1.0
 	golang.org/x/sys v0.33.0
 )
 

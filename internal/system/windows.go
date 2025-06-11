@@ -1,3 +1,5 @@
+//go:build windows
+
 package system
 
 import (
@@ -69,7 +71,7 @@ type WindowSearchData struct {
 
 type WindowsSystemController struct{}
 
-func NewWindowsSystemController() *WindowsSystemController {
+func NewSystemController() (*WindowsSystemController, error) {
 	return &WindowsSystemController{}
 }
 
