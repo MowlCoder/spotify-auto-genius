@@ -1,4 +1,4 @@
-# Spotify Auto Genius
+# Spotify Auto Genius Opener
 
 An application that automatically opens Genius lyrics pages for currently playing Spotify tracks.
 
@@ -9,9 +9,11 @@ An application that automatically opens Genius lyrics pages for currently playin
 - 📖 Opens the corresponding Genius lyrics page
 - 🔄 Falls back to Genius search if exact match not found
 - ⚡ Real-time tracking with minimal resource usage
+- 💻 Cross-platform support (Windows & Linux)
 
 ## How It Works
 
+**Windows:**
 1. The application continuously monitors Spotify's window title
 2. When a new track starts playing, it:
    - Extracts the track information from the window title
@@ -19,9 +21,17 @@ An application that automatically opens Genius lyrics pages for currently playin
    - Opens the exact lyrics page if found
    - Falls back to Genius search results if no exact match is found
 
+**Linux:**
+1. The application uses D-Bus to get track's metadata from Spotify
+2. When a new track starts playing, it:
+   - Gets track's artist and title
+   - Searches for the track on Genius
+   - Opens the exact lyrics page if found
+   - Falls back to Genius search results if no exact match is found
+
 ## Requirements
 
-- Windows operating system
+- Windows or Linux operating system
 - Spotify desktop application
 - Go 1.16 or higher
 
@@ -40,7 +50,7 @@ go mod download
 
 3. Build the application:
 ```bash
-go build
+go build -o spotify-auto-genius
 ```
 
 ## Usage
