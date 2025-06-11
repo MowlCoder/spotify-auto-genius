@@ -4,6 +4,7 @@ package system
 
 import (
 	"errors"
+	"os/exec"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -14,7 +15,6 @@ import (
 var (
 	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
 	modUser32   = windows.NewLazySystemDLL("user32.dll")
-	modShell32  = windows.NewLazySystemDLL("shell32.dll")
 
 	procCreateToolhelp32Snapshot = modKernel32.NewProc("CreateToolhelp32Snapshot")
 	procProcess32First           = modKernel32.NewProc("Process32FirstW")
@@ -24,7 +24,6 @@ var (
 	procIsWindowVisible          = modUser32.NewProc("IsWindowVisible")
 	procGetWindowTextLengthW     = modUser32.NewProc("GetWindowTextLengthW")
 	procGetWindowTextW           = modUser32.NewProc("GetWindowTextW")
-	procShellExecuteW            = modShell32.NewProc("ShellExecuteW")
 
 	cb = syscall.NewCallback(enumWindowsCallback)
 )
@@ -48,7 +47,6 @@ func enumWindowsCallback(hWnd windows.HWND, lParam uintptr) uintptr {
 
 const (
 	TH32CS_SNAPPROCESS = 0x00000002
-	SW_SHOWNORMAL      = 1
 )
 
 type ProcessEntry32 struct {
@@ -72,7 +70,7 @@ type WindowSearchData struct {
 type WindowsSystemController struct{}
 
 func NewSystemController() (*WindowsSystemController, error) {
-	return &WindowsSystemController{}
+	return &WindowsSystemController{}, nil
 }
 
 func (w *WindowsSystemController) getSpotifyWindow() (windows.HWND, error) {
@@ -138,11 +136,9 @@ func (w *WindowsSystemController) GetCurrentPlayingTrackTitle() (string, error) 
 }
 
 func (w *WindowsSystemController) OpenURLInBrowser(url string) error {
-	urlPtr, _ := syscall.UTF16PtrFromString(url)
-	openStr, _ := syscall.UTF16PtrFromString("open")
-	r, _, _ := procShellExecuteW.Call(0, uintptr(unsafe.Pointer(openStr)),
-		uintptr(unsafe.Pointer(urlPtr)), 0, 0, SW_SHOWNORMAL)
-	if r <= 32 {
+	cmd := exec.Command("cmd", "/C", "start", "", url)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Run(); err != nil {
 		return errors.New("failed to open URL in browser")
 	}
 	return nil
