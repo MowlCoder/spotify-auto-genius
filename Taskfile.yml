@@ -24,7 +24,7 @@ tasks:
 
   release:
     cmds:
-      - goreleaser release
+      - goreleaser release --clean
 
   clean:
     cmds:
